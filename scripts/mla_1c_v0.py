@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt # data plot
 #import matplotlib
 #from datetime import datetime,date # date objects
 import seaborn as sns # data plot 
-import statsmodels.api as sm
+# import statsmodels.api as sm
 #import networkx as nx
 from sklearn.ensemble import RandomForestRegressor
 
@@ -23,6 +23,12 @@ os.chdir(mainPath)
 
 #from my_functions_1c import my_prepareTrain
 import my_functions_1c as ct
+########################
+filePath="/home/chiara/kaggle/1C_PYproject/data/competitive-data-science-predict-future-sales/"+"sales_train_v2.csv"
+data=pd.read_csv(filePath, index_col=False) 
+data.head(5)
+data.shape
+data.tail(5)
 ######################## LOAD DATA TRAIN
 filePath="working_data/"+"1C_small_training.csv"
 data=pd.read_csv(filePath, index_col=False) 
@@ -537,4 +543,5 @@ featImp2=list(rfModel2.feature_importances_)
 feat_imp2=[(feat,round(imp,2)) for (feat,imp) in zip(featureNames2,featImp2)]
 
 df=pd.get_dummies(dataTrain)
+
 

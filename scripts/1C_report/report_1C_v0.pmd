@@ -1,0 +1,302 @@
+# A report on sales forcasting
+###### A Kaggle project
+
+#### Synopsis
+Sales forecasting is a common problem that can be easily? managed 
+using Machine Learning techniques.
+In this report, sales records made by the Russian software developer, 
+publisher and distributor company *1C Company* have been analysed. 
+Based on past sales, the amount of items that will be sold in a 
+certain shop is predicted to optimize the warehouse managment.
+The forecast accuracy is XXX% with an error of XXXX.
+------------------------------------------------------
+
+## Data
+
+1C Company is an independent software developer, distributor and 
+publisher based in Moscow, Russia. It deals with development, licence, 
+support, and sale of computer software and video games. 
+The company operates through a wide network of more than 10000 
+business partners spread across 25 countries. In 2006 the trademark 
+"1C" has been acknowledge wide popularity by the Russian Federal 
+Service for Intellectual Property <sup>[1]</sup>.
+ 
+[1]: [link](https://en.wikipedia.org/wiki/1C_Company).
+
+
+```{python import_library,echo=False,message=False,warning=False,cache=True}
+import os
+import sys
+import numpy as np # scientific calculation
+import pandas as pd # data analysis
+import matplotlib.pyplot as plt # data plot
+import seaborn as sns # data plot 
+import statsmodels.api as sm
+#import networkx as nx
+from sklearn.ensemble import RandomForestRegressor
+
+import chart_studio.plotly as py
+import plotly.graph_objects as go
+from plotly.offline import plot
+from plotly.subplots import make_subplots
+
+basicPath="/home/chiara/kaggle/1C_PYproject/" #scripts/
+os.chdir(basicPath+"scripts/")
+sys.path.append(os.getcwd())
+import my_functions_1c as ct 
+```
+
+```{python load_data,echo=False,message=False,warning=False,cache=True}
+basicPath="/home/chiara/kaggle/1C_PYproject/" #scripts/
+filePath=basicPath+"data/competitive-data-science-predict-future-sales/"+"sales_train_v2.csv"
+dataAll=pd.read_csv(filePath, index_col=False) 
+
+print(dataAll.head(3))
+print(dataAll.tail(3))
+```
+In here, a relative small record of products sold in a range of shops has 
+been analysed.
+As shown above, data consist in  <%= dataAll.shape[0]%> observations: 
+each one indicates how many (**item_cnt_day**) items (**item_id**) have been 
+sold in a certain day (**date**), in a certain shop (**shop_id**), at a 
+certain price (**item_price**). An incremental index is assigned to each 
+month: sales have been recorded from January 2013 to October 2015.
+Additional data consist in categorization for each item, and pair-wise 
+dictionaries with the actual name and the id of items, shops, and categories. 
+The original data set has been provided by Kaggle platform and can be found 
+[here](https://www.kaggle.com/c/competitive-data-science-predict-future-sales/data)
+
+### Data summary
+
+The aim of this report is to give a reliable estimate of the monthly 
+sales of 1C stores. Different stores can have different needs, and 
+certaintly, different items are sold more than others.
+Before engaging the prediction algorithm, let's take a closer look 
+at the features that could influence the estimate the most. 
+First, the data set is splitted into two parts: 
+
+- **control data set**: from Jan 2013 to Dec 2013, the oldest sales, 
+used to test the prediction algorithm
+- **training data set**: from Jan 2014 to Oct 2015, the most recent 
+sales, used to build the prediction algorithm 
+
+```{python plot_dataAll,echo=False,cache=True,result="hide"}
+filePath=basicPath +"scripts/working_data/"+"1C_small_training.csv"
+data=pd.read_csv(filePath, index_col=False) 
+data=data.drop("Unnamed: 0",axis=1)
+
+filePath=basicPath+"scripts/working_data/"+"1C_ctrl_training.csv"
+data2=pd.read_csv(filePath, index_col=False) 
+data2=data2.drop(["Unnamed: 0",'Unnamed: 0.1', 'Unnamed: 0.1.1'],axis=1)
+
+dataAll=data2.append(data)
+
+aN_itemID=dataAll["item_id"].value_counts().reset_index().sort_values("index")
+aN_itemPrice=dataAll["item_price"].value_counts().reset_index().sort_values("index")
+aN_categoryID=dataAll["item_category_id"].value_counts().reset_index().sort_values("index")
+aN_shopID=dataAll["shop_id"].value_counts().reset_index().sort_values("index")
+
+N_itemID=data["item_id"].value_counts().reset_index().sort_values("index")
+N_itemPrice=data["item_price"].value_counts().reset_index().sort_values("index")
+N_categoryID=data["item_category_id"].value_counts().reset_index().sort_values("index")
+N_shopID=data["shop_id"].value_counts().reset_index().sort_values("index")
+
+```
+
+There is quite a big range of products and stores: <%= len(N_shopID) %> shops 
+sold <%= len(N_itemID) %> items divided into <%= len(N_categoryID) %> 
+categories which span a price range of <%= abs(N_itemPrice["index"]).min() %> - 
+<%= N_itemPrice["index"].max() %> Russian Ruples.
+Note that in the training data are "missing" <%= -len(N_itemID)+len(aN_itemID)%> 
+items, <%= -len(N_shopID)+len(aN_shopID) %> shops, and 
+<%= -len(N_categoryID) +len(aN_categoryID)%> categories from the control data set.
+This is not a problem, indeed it allows to see how the algorithm 
+behaves on unknown data. In order to summarize important features of the data, 
+some summary figures are shown.
+
+
+The upper panel of Figure 1 shows the total number of item sold in each shop 
+(black lines represent the variability over items).
+The most productive shop is the Moscow shopping center "Semenovsky" (31) 
+with more than 175 thousand of items sold, followed by the Moscow mall 
+"Atrium" (25) with more than 135 thousand sales, and the shopping mall
+"MEGA Tepliy Stan" (28) in the outskirt of Moscow with more then 100 
+thousand sales. The less productive shops are "" (11), and "Novosibirsk"" (36)
+shopping and entertainment center in Middle Russia.
+
+```{python fig_cntXshop,echo=False,cache=False,result="hide",caption = 'Figure 1',fig=True,width="900px"}
+
+# tot num of item_id sold in each shop
+data_shop_sales=data.groupby(["shop_id","item_id"])["item_cnt_day"].sum().reset_index()
+
+data=ct.my_createMonthYear(data)
+# tot num of items sold in each shop each month
+data_shop_trend=data.groupby(["date_block_num","MonYe","shop_id"])["item_cnt_day"].sum().reset_index()#
+DB3=data_shop_trend.sort_values("item_cnt_day",ascending=False)
+popular_shop=DB3["shop_id"].head(n=100).unique()
+
+DB3=data_shop_trend[data_shop_trend.shop_id.isin(popular_shop)]
+
+
+sns.set(font_scale=1.5,rc={'figure.figsize':(25,15)})
+fig3, ax3 = plt.subplots(2, 1)
+sns.barplot(x="shop_id",y="item_cnt_day",estimator=sum,data=data_shop_sales,ax=ax3[0])
+sns.pointplot(x='MonYe', y='item_cnt_day',hue='shop_id',data=DB3,ax=ax3[1])
+#ax3[0].set_xticklabels(ax3[0].get_xticklabels(), rotation=45)
+ax3[1].set_xticklabels(ax3[1].get_xticklabels(), rotation=45)
+ax3[0].set_title("Number of items sold in each shop")
+ax3[1].set_title("Popular shops trends")
+fig3
+```
+
+
+
+
+
+The upper panel of Figure 2 shows the number of items in each category. 
+Category 40 is the wider and includes more than 3500 movies in DVD; 
+categories 55 and 37 collects more than 1500 of items each, representing 
+BLU-RAYS movies and local music CDs, respectively.
+The lower panel of Figure 1 shows sale trends of the most popular categories. 
+The total number of items, for each month and for each category, has 
+been calculated and plotted.
+Note that all categories have a peak on December, likely due to 
+festivities. 
+*The most sold items are DVDs (40), PC games (30), and local music 
+CDs (55).*
+More unpopular categories includes special editions games for PC (28) 
+and games for XBOX 360 (23).
+Also, note that the most popular categories have a steeper descending 
+trend in respect to the unpopular ones, which have more stable sales.
+
+```{python fig_catTrend,echo=False,cache=False,message=False,caption = 'Figure 2',fig=True,width="900px"}
+data_categ=data.groupby(["item_category_id"])["item_id"].unique()
+# number of items for each category
+DD1=data_categ.apply(lambda x:len(x)).reset_index()
+DD1.columns=["item_category_id","num_items"]
+
+
+data=ct.my_createMonthYear(data)
+data_category_trend=data.groupby(["date_block_num","MonYe","item_category_id"])["item_cnt_day"].sum().reset_index()#
+DB1=data_category_trend.sort_values("item_cnt_day",ascending=False)
+popular_cat=DB1["item_category_id"].head(n=100).unique()
+
+DB1=data_category_trend[data_category_trend.item_category_id.isin(popular_cat)]
+
+sns.set(font_scale=1.5,rc={'figure.figsize':(25,15)})
+fig1, ax1 = plt.subplots(2, 1)
+sns.barplot(x="item_category_id",y="num_items",data=DD1,ax=ax1[0])
+sns.pointplot(x='MonYe',y='item_cnt_day',hue='item_category_id',data=DB1,ax=ax1[1])
+ax1[0].set_title("Number of items per category")
+ax1[1].set_title("Popular categories trends")
+#ax1[0].set_xticklabels(ax1[0].get_xticklabels(), rotation=45)
+ax1[1].set_xticklabels(ax1[1].get_xticklabels(), rotation=45)
+fig1
+```
+
+The left panel of Figure 2 shows the price range for each category.
+For example, the price of DVD (category=40) ranges from 10 to less 
+than 5000 Ruples, which correspond to 0.14-70 Euros; 
+a PC game is sold up to 5000 Ruples (70 Euros).
+The right panel of Figure 2 shows how many items, on average, 
+have been sold for each price range. 
+The most popular items cost between 100 and 499 Ruples with 40 
+thousands units sold, followed by items with a price up to 5000 
+Ruples. 
+*Medium priced items strongly contribute to the total sales, while 
+cheap or very expensive are less relevant.*
+
+
+```{python fig_catPrice,echo=False,cache=False,message=False,caption = 'Figure 3',fig=True,width="900px"}
+price_ranges=[0,10,50,100,500,1000,5000,10000,50000,310000]
+price_labs=["<10","<50","<100","<500","<1000","<5000","<10000","<50000","<310000"]
+data_price_sales=data.groupby(["item_id","item_price","date_block_num","item_category_id"])["item_cnt_day"].sum().reset_index()
+data_price_sales["price_range"]=pd.cut(data_price_sales["item_price"],bins = price_ranges,labels = price_labs)
+data_price_sales=data_price_sales.sort_values("date_block_num")
+
+data_price_sales11=pd.pivot_table(data_price_sales, #[["item_category_id","price_range"]]
+                                   values="item_price",index=["item_category_id"],
+                                   columns=["price_range"])
+AA=data_price_sales11.notna()
+data_price_sales2=data_price_sales.groupby(["date_block_num","price_range"])["item_cnt_day"].sum().reset_index()
+
+#stripplot swarmplot
+sns.set(font_scale=1.5,rc={'figure.figsize':(25,15)})
+fig2, ax2 = plt.subplots(1, 2)
+sns.heatmap(AA, cmap="YlGnBu",ax=ax2[0])   #,center=0.5
+# sns.stripplot(y="item_category_id", x="price_range",data=B,ax=ax2[0])#
+sns.barplot(x="price_range", y="item_cnt_day",data=data_price_sales2,ax=ax2[1])
+ax2[0].set_xticklabels(ax2[0].get_xticklabels(), rotation=45)
+ax2[1].set_xticklabels(ax2[1].get_xticklabels(), rotation=45)
+fig2
+```
+
+In addition to price and category, another feature that can help 
+forecast sales is the past average of sales. For each month, 
+for each shop, and for each item the number of units sold till 
+that moment (starting from Jan 14) are averaged.
+The average past sales can also be used as a rough forecast to 
+evaluate the result of the machine learning algorithm. 
+
+###### correlation????
+
+## Forecast
+
+```{python training_err,echo=False,message=False,error=False}
+dfPath=basicPath+"scripts/working_data/"+"1C_train_err.csv"
+train_err=pd.read_csv(dfPath, index_col=False) 
+dfPath=basicPath+"scripts/working_data/"+"1C_ctrlAStest_err.csv"
+ctrl_err=pd.read_csv(dfPath, index_col=False) 
+
+rmseTrain=np.zeros(3)
+accTrain=np.zeros(3)
+thr=[1,2,6]
+for i in range(3):
+   [rmseTrain[i],accTrain[i]]=ct.my_calculate_RMSE_ACC(train_err,"actual",
+                                              predictions=train_err["predicted"],
+                                              fitModel=None,
+                                              make_pred=False,thres=thr[i])
+
+rmseCtrl=np.zeros(3)
+accCtrl=np.zeros(3)
+thr=[1,2,6]
+for i in range(3):
+   [rmseCtrl[i],accCtrl[i]]=ct.my_calculate_RMSE_ACC(ctrl_err,"actual",
+                                              predictions=ctrl_err["predicted"],
+                                              fitModel=None,
+                                              make_pred=False,thres=thr[i])
+
+```
+
+The Random Forest method has been chosen to forecast the monthly sales 
+for each item and shop of 1C company. The algorithm has been trained 
+on the most recent sales, from Jan 2014 to Oct 2015.
+The predicted amount of items sold during the training period 
+(Jan 14- Oct 15) exactly matches the true amount of sales is 
+<%= accTrain[0] %> %. However, allowing a margin of error of just 
+1 unit, the accuracy increses to <%= accTrain[1] %> %, and within 
++/- 5 units the accuracy reaches <%= accTrain[2] %> %.
+
+The forecast fo the sales from Jan 2013 to Dec 2013, is exactly 
+accurate at <%= accCtrl[0] %> %. By allowing an error within +/- 1 
+and +/- 5 units, the accuracy increases to <%= accCtrl[1] %> % and 
+<%= accCtrl[2] %> %, respectively. These last performances could 
+be used to make the prospect for future sales in 1C company.
+
+```{python}
+
+meanMonthlySales=dataAll.groupby(["date_block_num"])["item_cnt_day"].sum()
+ms_mean=meanMonthlySales.mean()
+
+```
+
+Note that by simply adding the average monthly past sales in the 
+algorithm the accuracy of exactly predicted sales is increased by 
+3-5%. The average number of items sold monthly by 1C company is 
+about <%=round(ms_mean) %>, so an improvement of just 3% means 
+that about <%= 100*(round(ms_mean)/3)%> items could be unsold.
+
+
+
+
+## Methodology

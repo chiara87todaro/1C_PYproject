@@ -204,7 +204,7 @@ x=ranges.value_counts()
 sum(x)
 price_dist=pd.DataFrame({"price":prices,"count":prices_counts,"range":ranges})
 sns.set(rc={'figure.figsize':(18,10)})
-#sns.barplot(x="price",y="count",hue="range",data=price_dist)
+# sns.barplot(x="price",y="count",hue="range",data=price_dist)
 # RES
 # most of the items are between 1000 and 5000
 # more than 50% of the items are between 500 and 5000
@@ -212,10 +212,11 @@ sns.set(rc={'figure.figsize':(18,10)})
 #############
 price_ranges=[0,10,50,100,500,1000,5000,10000,50000,310000]
 price_labs=["<10","<50","<100","<500","<1000","<5000","<10000","<50000","<310000"]
-data_price_sales2=dataTrain.groupby(["item_id","item_price","date_block_num"])["item_cnt_day"].sum().reset_index()
+data_price_sales2=dataTrain.groupby(["item_id","item_price","date_block_num","item_category_id"])["item_cnt_day"].sum().reset_index()
 data_price_sales2["price_range"]=pd.cut(data_price_sales2["item_price"],bins = price_ranges,labels = price_labs)
 data_price_sales2=data_price_sales2.sort_values("date_block_num")
 data_price_sales2.head(n=10)
+data_price_sales2.keys()
 data_price_sales2=data_price_sales2.groupby(["date_block_num","price_range"])["item_cnt_day"].sum().reset_index()
 
 sns.set(rc={'figure.figsize':(18,10)})
@@ -228,7 +229,8 @@ sns.lineplot(x="date_block_num", y="item_cnt_day",hue='price_range', data=data_p
 # others lower sales with stable trend
 
 sns.set(rc={'figure.figsize':(18,10)})
-sns.barplot(x="price_range", y="item_cnt_day", data=data_price_sales2)
+sns.barplot(x="price_range", y="item_cnt_day",data=data_price_sales2)
+
 
 # RES
 # price >100 and <5000 => highest sales

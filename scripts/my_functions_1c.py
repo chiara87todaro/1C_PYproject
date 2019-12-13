@@ -29,6 +29,15 @@ def my_toOverallTS(data):
     overall_ts["index"]=range(0,len(overall_ts["tot_cnt"]))
     return overall_ts
 
+def my_createMonthYear(data):
+    if ("true_date" in data.columns):
+        data["true_date"]=pd.to_datetime(data["true_date"],format="%Y-%m-%d")
+        data["month"]=data["true_date"].apply(lambda d: calendar.month_name[d.month]) #month name
+        data["month"]=data["month"].apply(lambda s: s[0:3])
+        data["year"]=data["true_date"].apply(lambda d: str(d.year)[2:4]) 
+        data["MonYe"]=data["month"]+data["year"]
+    return data
+
 
 def my_prepareTrain(data):
     data["true_date"]=pd.to_datetime(data["true_date"],format="%Y-%m-%d")
@@ -51,9 +60,13 @@ def my_prepareTrain(data):
     return dataTrain
 
 
-def my_df2arry_endo_exog(data,target):
-    endo=np.array(data[target], dtype=float)
-    exog=np.array(data[[col for col in data.columns if col != target]], dtype=float)
+def my_df2arry_endo_exog(data,target=None):
+    if target != None:
+        endo=np.array(data[target], dtype=float)
+        exog=np.array(data[[col for col in data.columns if col != target]], dtype=float)
+    else:
+        endo=np.array(0)
+        exog=np.array(data)
     return [endo,exog]
 
 def my_historicMean(data,date_block,col_name):
@@ -165,15 +178,16 @@ def my_rmse(y, y_pred):
     return np.sqrt(np.mean(np.square(y - y_pred)))
 
 
-def my_calculate_RMSE_ACC(data,target_col,fitModel):
-    [target,X]=my_df2arry_endo_exog(data,"month_cnt")
-#    target=data[target_col]
+def my_calculate_RMSE_ACC(data,target_col,predictions=None,fitModel=None,make_pred=True,thres=1):
+    target=data[target_col]
 #    data2=data.drop(target_col,axis=1)
-    predictions=fitModel.predict(exog=X, transform=True)
-#    err=abs(target-predictions)
+    if (make_pred==True): #    err=abs(target-predictions)
+        [target,X]=my_df2arry_endo_exog(data,"month_cnt")
+        predictions=fitModel.predict(exog=X, transform=True)
+    
     rmse=my_rmse(target,predictions) 
     err=abs(target-predictions)
-    acc=100*(len([e for e in err if e<1])/len(err)) 
+    acc=100*(len([e for e in err if e<thres])/len(err)) 
     res=[rmse,acc]
     return res
     
@@ -210,10 +224,78 @@ def my_compareFitModels(dataTrain,modelFormula,modelName,modelFamily,dataTest):
             })
         
     return accRes
+
+
+def my_prepareTest(test,train,catalog,new_month=True):
+    if "date_block_num" in test.keys():
+        if "month" in  test.keys():
+            T=pd.merge(test.drop(["date_block_num","month"],axis=1),
+               train.drop(["month_cnt"],axis=1),
+               how="left",on=["item_id","shop_id"])
+    else:
+        T=pd.merge(test,train.drop(["month_cnt"],axis=1),
+               how="left",on=["item_id","shop_id"])
+        
+    # there are duplicates with different features
+    # T=T.drop(["date_block_num","month_cnt"],axis=1)
+    aggLast={"category_id":{"category_id":"last"},
+         # "month":{"month":"last"},
+         "item_price":{"item_price":"last"},
+         "histo_mean_cnt":{"histo_mean_cnt":"last"}
+         } #select most recent price,histo_mean, month, category
+    TT=T.groupby(["item_id","shop_id"]).aggregate(aggLast).reset_index()
+    TT.columns=["item_id","shop_id","category_id","item_price","histo_mean_cnt"]
+    nanEntry=TT.isnull()
+    nanIndices = nanEntry.query('item_price==True').index.tolist() 
+    # # create a df for item, category, mean price
+    # agg_catalog={"category_id":{"category_id":"first"},
+    #          "item_price":{"item_price":"median"},
+    #          }
+    # item_cat_price=TT.groupby(["item_id"]).aggregate(agg_catalog).reset_index()
+    # item_cat_price.columns=["item_id","category_id","item_price"]
+    # if item_cat_price.isnull().sum().sum() !=0:
+    #     item_cat_price["category_id"][item_cat_price["category_id"].isna()]=1000
+    #     meanPrice=item_cat_price["item_price"].mean()
+    #     item_cat_price["item_price"][item_cat_price["item_price"].isna()]=meanPrice
     
+    for ind in nanIndices:
+        item=TT["item_id"][ind]
+        categ=catalog[catalog["item_id"]==item]["item_category_id"]
+        price=catalog[catalog["item_id"]==item]["item_price"]
+        TT["category_id"][ind]=categ
+        TT["item_price"][ind]=price
+        TT["histo_mean_cnt"][ind]=0
+        
+    if new_month==True:
+        TT["month"]=11
+        TT["date_block_num"]=34
+    else:
+        TT=pd.merge(test[["item_id","shop_id","date_block_num","month"]],
+                        TT,how="left",on=["item_id","shop_id"])
+            
+    TT=TT[[col for col in train.keys() if col != "month_cnt"]]
+
+    return TT
     
+
+def my_create_catalog(dataAll):
+    filePath="/home/chiara/kaggle/1C_PYproject/data/competitive-data-science-predict-future-sales/"+"items.csv"
+    items=pd.read_csv(filePath, index_col=False) 
+    items=items.drop("item_name",axis=1)
     
-    
+    DA_price=dataAll.groupby(["item_id","item_category_id"])["item_price"].mean()
+    item_cat_price=pd.merge(items,DA_price,how="left",on=["item_id","item_category_id"])
+    item_cat_price.isnull().sum()
+    mean_CatPrice=item_cat_price.groupby(["item_category_id"])["item_price"].mean().reset_index()
+    # sum(mean_CatPrice.isnull())
+    nanEntry=item_cat_price.isnull()
+    nanIndices = nanEntry.query('item_price==True').index.tolist() 
+    for ind in nanIndices:
+        categ=item_cat_price["item_category_id"][ind]
+        price=mean_CatPrice[mean_CatPrice["item_category_id"]==categ]["item_price"]
+        item_cat_price["item_price"][ind]=price
+
+    return item_cat_price
     
     
     
