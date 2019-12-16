@@ -1,14 +1,14 @@
-# A report on sales forcasting
+# A report on sales forecasting
 ###### A Kaggle project
 
 #### Synopsis
-Sales forecasting is a common problem that can be easily? managed 
+Sales forecasting is a common problem that can be optimized by 
 using Machine Learning techniques.
-In this report, sales records made by the Russian software developer, 
-publisher and distributor company *1C Company* have been analysed. 
+In this report, sales records made by the Russian software company 
+*1C Company* have been analysed. 
 Based on past sales, the amount of items that will be sold in a 
-certain shop is predicted to optimize the warehouse managment.
-The forecast accuracy is XXX% with an error of XXXX.
+certain shop is predicted. 
+The forecast accuracy is 96.06% with an error of +/- 5 units.
 ------------------------------------------------------
 
 ## Data
@@ -46,25 +46,15 @@ sys.path.append(os.getcwd())
 import my_functions_1c as ct 
 ```
 
-```{python load_data,echo=False,message=False,warning=False,cache=True}
-basicPath="/home/chiara/kaggle/1C_PYproject/" #scripts/
-filePath=basicPath+"data/competitive-data-science-predict-future-sales/"+"sales_train_v2.csv"
-dataAll=pd.read_csv(filePath, index_col=False) 
-
-print(dataAll.head(3))
-print(dataAll.tail(3))
-```
-In here, a relative small record of products sold in a range of shops has 
-been analysed.
-As shown above, data consist in  <%= dataAll.shape[0]%> observations: 
-each one indicates how many (**item_cnt_day**) items (**item_id**) have been 
-sold in a certain day (**date**), in a certain shop (**shop_id**), at a 
-certain price (**item_price**). An incremental index is assigned to each 
-month: sales have been recorded from January 2013 to October 2015.
-Additional data consist in categorization for each item, and pair-wise 
-dictionaries with the actual name and the id of items, shops, and categories. 
+In here, a small record of products sold in Russian shops has been analysed.
+Data consist in almost 3 million observations: each one indicates **how many 
+items** have been sold in a certain **day**, in a certain **shop**, at a 
+certain **price**. An incremental index is assigned to each month: sales 
+have been recorded from January 2013 to October 2015.
+Additional data consist in pair-wise dictionaries with the actual name and 
+the id of items, shops, and categories, respectively. 
 The original data set has been provided by Kaggle platform and can be found 
-[here](https://www.kaggle.com/c/competitive-data-science-predict-future-sales/data)
+[here](https://www.kaggle.com/c/competitive-data-science-predict-future-sales/data).
 
 ### Data summary
 
@@ -116,13 +106,14 @@ some summary figures are shown.
 
 
 The upper panel of Figure 1 shows the total number of item sold in each shop 
-(black lines represent the variability over items).
-The most productive shop is the Moscow shopping center "Semenovsky" (31) 
-with more than 175 thousand of items sold, followed by the Moscow mall 
-"Atrium" (25) with more than 135 thousand sales, and the shopping mall
-"MEGA Tepliy Stan" (28) in the outskirt of Moscow with more then 100 
-thousand sales. The less productive shops are "" (11), and "Novosibirsk"" (36)
-shopping and entertainment center in Middle Russia.
+(black lines represent the variability over items). 
+The lower panel of Figure 1 shows that the most productive shop is the 
+Moscow shopping center "Semenovsky" (31) with more than 175 thousand of items 
+sold, followed by the Moscow mall "Atrium" (25) with more than 135 thousand 
+sales, and the shopping mall "MEGA Tepliy Stan" (28) in the outskirt of
+ Moscow with more then 100 thousand sales. The less productive shops are 
+ the shop "Zhukovsky" (11), and "Novosibirsk"" (36) shopping and 
+ entertainment center in Middle Russia.
 
 ```{python fig_cntXshop,echo=False,cache=False,result="hide",caption = 'Figure 1',fig=True,width="900px"}
 
@@ -150,14 +141,11 @@ fig3
 ```
 
 
-
-
-
 The upper panel of Figure 2 shows the number of items in each category. 
 Category 40 is the wider and includes more than 3500 movies in DVD; 
 categories 55 and 37 collects more than 1500 of items each, representing 
 BLU-RAYS movies and local music CDs, respectively.
-The lower panel of Figure 1 shows sale trends of the most popular categories. 
+The lower panel of Figure 2 shows sale trends of the most popular categories. 
 The total number of items, for each month and for each category, has 
 been calculated and plotted.
 Note that all categories have a peak on December, likely due to 
@@ -194,17 +182,17 @@ ax1[1].set_xticklabels(ax1[1].get_xticklabels(), rotation=45)
 fig1
 ```
 
-The left panel of Figure 2 shows the price range for each category.
+The left panel of Figure 3 shows in blue the price range for each category.
 For example, the price of DVD (category=40) ranges from 10 to less 
 than 5000 Ruples, which correspond to 0.14-70 Euros; 
-a PC game is sold up to 5000 Ruples (70 Euros).
-The right panel of Figure 2 shows how many items, on average, 
+a PC game (30) is sold up to 5000 Ruples (70 Euros).
+The right panel of Figure 3 shows how many items, on average, 
 have been sold for each price range. 
 The most popular items cost between 100 and 499 Ruples with 40 
 thousands units sold, followed by items with a price up to 5000 
 Ruples. 
 *Medium priced items strongly contribute to the total sales, while 
-cheap or very expensive are less relevant.*
+cheap or very expensive items are less relevant.*
 
 
 ```{python fig_catPrice,echo=False,cache=False,message=False,caption = 'Figure 3',fig=True,width="900px"}
@@ -232,13 +220,12 @@ fig2
 ```
 
 In addition to price and category, another feature that can help 
-forecast sales is the past average of sales. For each month, 
+forecast sales is the average past sales. For each month, 
 for each shop, and for each item the number of units sold till 
 that moment (starting from Jan 14) are averaged.
 The average past sales can also be used as a rough forecast to 
 evaluate the result of the machine learning algorithm. 
 
-###### correlation????
 
 ## Forecast
 
@@ -260,11 +247,10 @@ for i in range(3):
 rmseCtrl=np.zeros(3)
 accCtrl=np.zeros(3)
 thr=[1,2,6]
-for i in range(3):
-   [rmseCtrl[i],accCtrl[i]]=ct.my_calculate_RMSE_ACC(ctrl_err,"actual",
-                                              predictions=ctrl_err["predicted"],
-                                              fitModel=None,
-                                              make_pred=False,thres=thr[i])
+for i in range(3): 
+    [rmseCtrl[i],accCtrl[i]]=ct.my_calculate_RMSE_ACC(ctrl_err,"actual",
+                               predictions=ctrl_err["predicted"],
+                               fitModel=None,make_pred=False,thres=thr[i])
 
 ```
 
@@ -272,31 +258,54 @@ The Random Forest method has been chosen to forecast the monthly sales
 for each item and shop of 1C company. The algorithm has been trained 
 on the most recent sales, from Jan 2014 to Oct 2015.
 The predicted amount of items sold during the training period 
-(Jan 14- Oct 15) exactly matches the true amount of sales is 
-<%= accTrain[0] %> %. However, allowing a margin of error of just 
-1 unit, the accuracy increses to <%= accTrain[1] %> %, and within 
-+/- 5 units the accuracy reaches <%= accTrain[2] %> %.
+(Jan 14- Oct 15) exactly matches the true amount of sales 
+<%= round(accTrain[0],ndigits=2) %>% of the times. However, allowing a 
+margin of error of just 1 unit, the accuracy increses to 
+<%= round(accTrain[1],ndigits=2) %>%, and within +/- 5 units the accuracy 
+reaches <%= round(accTrain[2],ndigits=2) %>%.
 
-The forecast fo the sales from Jan 2013 to Dec 2013, is exactly 
-accurate at <%= accCtrl[0] %> %. By allowing an error within +/- 1 
-and +/- 5 units, the accuracy increases to <%= accCtrl[1] %> % and 
-<%= accCtrl[2] %> %, respectively. These last performances could 
-be used to make the prospect for future sales in 1C company.
+To perform a reliable test of the algorithm, the true amount of items sold 
+from Jan 2013 to Dec 2013 has been discarded. The average past sales have 
+been calculated by copying the ones of the training data set. For new items 
+and shops, the average past sales is set to 0.
+The forecast for the "control" sales is exactly accurate at 
+<%= round(accCtrl[0],ndigits=2) %>%. By allowing an error within +/- 1 
+and +/- 5 units, the accuracy increases to <%= round(accCtrl[1],ndigits=2) %>% 
+and <%= round(accCtrl[2],ndigits=2) %>%, respectively. 
 
-```{python}
 
-meanMonthlySales=dataAll.groupby(["date_block_num"])["item_cnt_day"].sum()
-ms_mean=meanMonthlySales.mean()
+
+```{python comp_pred,echo=False,cache=False,message=False,caption = 'Figure 4',fig=True,width="900px"}
+dfPath=basicPath+"scripts/working_data/"+"ctrl_dataPredictions.csv"
+data_predictions=pd.read_csv(dfPath,index_col=False)
+
+data_predictions=data_predictions.reset_index().set_index(["index","new"])#"actual","predicted","historic"
+data_predictions2=data_predictions.stack().reset_index()
+data_predictions2
+data_predictions2.columns=["id","new","method","sales"]
+
+
+sns.set(font_scale=2.5,rc={'figure.figsize':(25,15)})
+fig4, ax4 = plt.subplots(1, 1)
+sns.scatterplot(x="id",y="sales",hue="method",x_jitter=0.2,y_jitter=0.2,
+                data=data_predictions2[data_predictions2["id"]<700],ax=ax4)
+fig4
+
+
+rmseHist=np.zeros(3)
+accHist=np.zeros(3)
+thr=[1,2,6]
+for i in range(3):
+    [rmseHist[i],accHist[i]]=ct.my_calculate_RMSE_ACC(data_predictions,"actual",
+                                   predictions=data_predictions["historic"],
+                                   fitModel=None, make_pred=False,thres=thr[i])
 
 ```
-
-Note that by simply adding the average monthly past sales in the 
-algorithm the accuracy of exactly predicted sales is increased by 
-3-5%. The average number of items sold monthly by 1C company is 
-about <%=round(ms_mean) %>, so an improvement of just 3% means 
-that about <%= 100*(round(ms_mean)/3)%> items could be unsold.
-
+Figure 4 shows the improvement of the machine learning prediction and the 
+estimate using "historic" data for a subset of the control data set. 
+The overall accuracy for the historic estimate is <%= round(accHist[0],ndigits=2) %>%, 
+<%= round(accHist[1],ndigits=2) %>%, and <%= round(accHist[2],ndigits=2) %>% 
+within +/-0, +/-1, and +/-5 items, respectively.
 
 
 
-## Methodology

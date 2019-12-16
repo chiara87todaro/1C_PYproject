@@ -12,14 +12,14 @@ import numpy as np # scientific calculation
 import pandas as pd # data analysis
 import matplotlib.pyplot as plt # data plot
 import seaborn as sns # data plot 
-import statsmodels.api as sm
+# import statsmodels.api as sm
 #import networkx as nx
-import chart_studio.plotly as py
-import plotly.graph_objects as go
-from plotly.offline import plot
-from plotly.subplots import make_subplots
+# import chart_studio.plotly as py
+# import plotly.graph_objects as go
+# from plotly.offline import plot
+# from plotly.subplots import make_subplots
 
-from sklearn.ensemble import RandomForestRegressor
+# from sklearn.ensemble import RandomForestRegressor
 
 
 mainPath="/home/chiara/kaggle/1C_PYproject/scripts/"
@@ -208,7 +208,8 @@ data2=data2.drop(["Unnamed: 0",'Unnamed: 0.1', 'Unnamed: 0.1.1'],axis=1)
 dataCtrl=ct.my_prepareTrain(data2)
 dataCtrlHM=ct.my_summaryHistoricFunc(dataCtrl,f_mean=True,f_sum=False) #takes almost 10 minutes
 dfPath=basicPath+"scripts/working_data/"+"1C_ctrl_histoMean.csv"
-dataCtrlHM.to_csv(dfPath, header=True, index=False)
+# dataCtrlHM.to_csv(dfPath, header=True, index=False)
+dataCtrlHM=pd.read_csv(dfPath, index_col=False)
 
 C=pd.merge(dataCtrl,dataCtrlHM,how="left",on=["date_block_num","item_id","shop_id"])
 
@@ -277,24 +278,153 @@ train_err["int_err"]=round(train_err["actual"]-train_err["predicted"])
 ctrl_err["int_predicted"]=round(ctrl_err["predicted"])
 ctrl_err["int_err"]=round(ctrl_err["actual"]-ctrl_err["predicted"])
 
+train_err["new"]="no"
+train_err["data"]="train"
+ctrl_err["data"]="ctrl"
+all_err=train_err.append(ctrl_err,ignore_index=True)
+
+
+dfPath=basicPath+"scripts/working_data/"+"1C_all_err.csv"
+# all_err.to_csv(dfPath,header=True, index=False) 
+all_err=pd.read_csv(dfPath, index_col=False) 
+
+ctrl_err=all_err[all_err["data"]=="ctrl"]
+ctrl_err=ctrl_err.drop("data",axis=1)
+
+sum(all_err["predicted"]<0)
+sum(all_err["err"]<0)
 
 sns.set(rc={'figure.figsize':(12,6)})
-fig4, ax4 = plt.subplots(2, 2)
-sns.regplot(x="actual",y="predicted",data=train_err,ax=ax4[0,0])
-# ax4[0,0].set_title("[train] x: actual | y: predicted")
-sns.regplot(x="actual",y="err",data=train_err, marker="+",ax=ax4[0,1])
-# ax4[0,1].set_title("[train] x: actual | y: actual-pred")
-# sns.regplot(x="actual",y="err",data=train_err,ax=ax4[0,2])
-# ax4[0,2].set_title("[train] x: actual | y: act-pred")
+fig5=sns.lmplot(x="actual",y="predicted",data=all_err,
+                hue="new", col="data",sharey=True) 
+fig5=fig5.ylim(-100, 2500)
+fig5
 
-sns.regplot(x="actual",y="predicted",data=ctrl_err, color="m",ax=ax4[1,0])
-# ax4[0,0].set_title("[control] x: actual | y: predicted")
-sns.regplot(x="actual",y="err",data=ctrl_err, color="m", marker="+",ax=ax4[1,1])
-# ax4[0,1].set_title("[control] x: actual | y: abs(act-pred)")
-# sns.regplot(x="actual",y="err",data=ctrl_err,ax=ax4[1,2])
-# ax4[0,2].set_title("[control] x: actual | y: act-pred")
 
+# Figure 5 shows how the machine learnign algorithm actually performs. 
+# The actual against the predicted sales are compared for 
+# the train and control data set, on the left and right, respectively.
+# Generally, the algorithm underestimates the actual sales, althogh in same 
+# cases when the actual number of sold items is low, the error on the prediction 
+# could be almost 500 items. This behaviour characterize in particular the 
+# "new" items, as shown in the right panel.
+
+
+
+sns.set(rc={'figure.figsize':(12,6)})
+fig6=sns.lmplot(x="actual",y="err",data=all_err, hue="new", col="data")
+
+
+# sns.set(rc={'figure.figsize':(12,6)})
+# fig4, ax4 = plt.subplots(1, 2)
+# sns.regplot(x="actual",y="predicted",data=train_err,ax=ax4[0])
+# ax4[0].set_title("[train] x: actual | y: predicted")
+# sns.regplot(x="actual",y="err",data=train_err, marker="+",ax=ax4[1])
+# ax4[1].set_title("[train] x: actual | y: actual-pred")
+# # sns.regplot(x="actual",y="err",data=train_err,ax=ax4[0,2])
+# # ax4[0,2].set_title("[train] x: actual | y: act-pred")
+# fig4
+
+# sns.set(rc={'figure.figsize':(12,6)})
+# fig5 #, ax5 = plt.subplots(1, 2)
+# sns.lmplot(x="actual",y="predicted",data=ctrl_err, hue="new")
+# # ax4[1,0].set_title("[control] x: actual | y: predicted")
+# sns.lmplot(x="actual",y="err",data=ctrl_err, hue="new")
+# # ax4[1,1].set_title("[control] x: actual | y: abs(act-pred)")
+# # sns.regplot(x="actual",y="err",data=ctrl_err,ax=ax4[1,2])
+# # ax4[0,2].set_title("[control] x: actual | y: act-pred")
+
+
+ct.my_rmse(train_err["actual"],train_err["predicted"]) # 4.64
+ct.my_rmse(ctrl_err["actual"],ctrl_err["predicted"]) # 6.71
+
+####### diffrent predictions
+# actual, predicted, histo_mean
+newItems=list(set(data2["item_id"]).difference(set(data["item_id"])))
+newItems.sort()
+
+ctrl_err["new"]="no"
+for it in newItems:
+    ctrl_err.loc[ctrl_err["item_id"]==it,"new"]="yes" #takes a lot
+        
+ctrl_err[ctrl_err["item_id"]==12]
+data_predictions=pd.DataFrame({"actual":ctrl_err["actual"],
+                               "predicted":ctrl_err["predicted"],
+                               "historic":C["histo_mean_cnt"],
+                               "new":ctrl_err["new"]})
+
+dfPath=mainPath+"working_data/"+"ctrl_dataPredictions.csv"
+# data_predictions.to_csv(dfPath,header=True, index=False)
+data_predictions=pd.read_csv(dfPath,index_col=False)
+
+
+data_predictions=data_predictions.reset_index().set_index(["index","new"])#"actual","predicted","historic"
+data_predictions2=data_predictions.stack().reset_index()
+data_predictions2
+data_predictions2.columns=["id","new","method","sales"]
+
+data_predictions=data_predictions.reset_index()
+
+
+sns.set(rc={'figure.figsize':(8,6)})
+fig4, ax4 = plt.subplots(1, 1)
+sns.scatterplot(x="id",y="sales",hue="method",x_jitter=0.2,y_jitter=0.2,
+                data=data_predictions2[data_predictions2["id"]<600],ax=ax4)
+# sns.scatterplot(x="actual",y="predicted",hue="new",x_jitter=0.2,y_jitter=0.2,
+#                 data=data_predictions[data_predictions["index"]<10000],ax=ax4[1])
+# sns.scatterplot(x="index",y="actual",hue="new",color="r",
+#                 data=data_predictions[data_predictions["index"]<500],ax=ax4[1])
 fig4
+
+errCrmse=ctrl_err.groupby("new")["err"].mean()
+
+### find feature for bad predictions
+
+sns.set(rc={'figure.figsize':(8,6)})
+fig6, ax6 = plt.subplots(1, 1)
+sns.scatterplot(x="actual",y="predicted",hue="item_id",x_jitter=0.2,y_jitter=0.2,
+                data=ctrl_err)#,ax=ax6[0]
+sns.scatterplot(x="actual",y="predicted",hue="shop_id",x_jitter=0.2,y_jitter=0.2,
+                data=ctrl_err,ax=ax6[1])
+sns.scatterplot(x="actual",y="predicted",hue="date_block_num",x_jitter=0.2,y_jitter=0.2,
+                data=ctrl_err,ax=ax6[2])
+# sns.scatterplot(x="actual",y="predicted",hue="item_id",x_jitter=0.2,y_jitter=0.2,
+#                 data=ctrl_err,ax=ax6[3])
+fig6
+
+ctrl_err.groupby("item_id")["err"].mean().sort_values()
+# item 587 ->err=-156, item 805 ->err=130, 
+ctrl_err.groupby("date_block_num")["err"].mean().sort_values() #~0
+ctrl_err.groupby("shop_id")["err"].mean().sort_values() 
+# shop 9 ->err=8, shop 42 ->err=-3, 
+
+100*(sum(ctrl_err["err"]>10)/len(ctrl_err["err"]))
+
+{11860} & set(newItems) #587
+
+data_predictions["predicted"].mean() #2.33
+data_predictions["predicted"].mean() #2.33
+
+ct.my_rmse(data_predictions["actual"],data_predictions["predicted"]) #6,71
+ct.my_rmse(data_predictions["actual"],data_predictions["historic"]) #6,25
+
+
+[rmseCtrl,accCtrl]=ct.my_calculate_RMSE_ACC(data_predictions,"actual",
+                                              predictions=data_predictions["historic"],
+                                              fitModel=None,
+                                              make_pred=False,thres=1)
+
+#acc 71.35,  rmse 6.71 predicted , mean abs 1.45 ,sd abs 6.55
+#acc 36.85,  rmse 6.25 historic, mean abs 1.85 ,sd abs 5.97
+#                               , mean abs 1.72 ,sd abs 5.27
+err= abs(data_predictions["actual"]- data_predictions["historic"])
+err.mean() 
+err.std()
+
+
+#########
+
+
 
 
 # linear regression actual vs err (non absolute)
